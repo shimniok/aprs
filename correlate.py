@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib import axes as ax
 from scipy.signal import fir_filter_design as ffd
 from scipy.signal import filter_design as ifd
-from scipy.signal import resample, lfilter, butter, lfilter_zi, correlate
+from scipy.signal import resample, lfilter, butter, lfilter_zi, correlate, fftconvolve
 
 if len(sys.argv) != 2:
     print("usage: {} filename".format(sys.argv[0]))
@@ -52,58 +52,85 @@ samp_per_bit = int(np.ceil(Fsr/bps))   # samples per bit
 print("Fsr={} samp_per_bit={} nframes={}".format(Fsr, samp_per_bit, nframes))
 
 ## filter design arguements
-#Fpass = 1000.      # passband edge
-#Fstop = 2400.      # stopband edge
-#Wp = Fpass/(Fsr)   # pass normalized frequency
-#Ws = Fstop/(Fsr)   # stop normalized frequency
+Fpass = 1200.    # passband edge
+Fstop = 2200.    # stopband edge
+Wp = Fpass/Fsr   # pass normalized frequency
+Ws = Fstop/Fsr   # stop normalized frequency
 
 #print("Filtering...")
 ## Create a filter
-#taps = 8
-#br = ffd.remez(taps, [0, Wp, Ws, .5], [1,0], maxiter=10000)
-#br = ffd.firwin2(taps, [0, Wp, Ws, 1], [0, 1, 1, 0])
-#br = ffd.firwin(taps, cutoff=[Wp, Ws], window='blackmanharris', pass_zero=False)
+taps = 16
+br = ffd.remez(taps, [0, Wp, Ws, .5], [1,0], maxiter=10000)
+br = ffd.firwin2(taps, [0, Wp, Ws, 1], [0, 1, 1, 0])
+br = ffd.firwin(taps, cutoff=[Wp, Ws], window='blackmanharris', pass_zero=False)
 
 # Once you have the coefficients from a filter design, (b for FIR b and a for IIR) you can use
 # a couple different functions to perform the filtering: lfilter, convolve, filtfilt. Typically
 # all these functions operate similar: y = filtfilt(b,a,x)
 # If you have a FIR filter simply set a=1, x is the input signal, b is the FIR coefficients.
-#data = lfilter(br, 1, data)
+data = lfilter(br, 1, data)
 
 ## Correlation
 
-chunk_size = 2*samp_per_bit  # number of samples to capture and then evaluate
+chunk_size = 1024  # number of samples to capture and then evaluate
 
 template_0 = [0 for i in range(chunk_size)]
 template_1 = [0 for i in range(chunk_size)]
 
 K = 2*np.pi/Fsr
 
-for s in range(samp_per_bit-1):
-    template_0[s] = np.sin(s*K*fzero)
-    template_1[s] = np.sin(s*K*fone)
+for s in range(samp_per_bit):
+#for s in range(chunk_size):
+    template_0.append(-np.cos(s*K*fzero))
+    template_1.append(-np.cos(s*K*fone))
     
 #plt.subplot(1,1,1)
 #plt.plot(range(len(template_0)), template_0, 'r-x', template_1, 'b-x')
-#plt.subplot(2,1,2)
-#plt.plot(template_1)
 #plt.show()
     
 # correlate each chunk
 correlate_0 = []
 correlate_1 = []
-for c in range(int(len(data)/chunk_size)-1):
-    print(c)
-    chunk = data[c*chunk_size:(c+1)*chunk_size-1]
-    correlate_0 += correlate(chunk, template_0, mode='full').tolist()
-    correlate_1 += correlate(chunk, template_1, mode='full').tolist()
+c = 0
+while c < len(data):
+    chunk = data[c:c+chunk_size-1]
+    c0 = correlate(chunk, template_0, 'full').tolist()
+    c1 = correlate(chunk, template_1, 'full').tolist()
+    for i in range(chunk_size):
+        c0[i] *= -c0[i]
+        c1[i] *= c1[i]
+    #plt.subplot(2,1,1)
+    #plt.plot(chunk)
+    #plt.subplot(2,1,2)
+    #plt.plot(range(len(c0)), c0, 'r-', c1, 'b-')
+    #plt.show()
+    correlate_0 += c0[0:chunk_size]
+    correlate_1 += c1[0:chunk_size]
+    c += chunk_size
 
-plt.subplot(3,1,1)
+# low pass filter
+b, a = butter(5, bps*2/Fsr, btype='low')
+zi = lfilter_zi(b, a)
+filt_corr_0, _ = lfilter(b, a, correlate_0, zi=zi*correlate_0[0])
+filt_corr_1, _ = lfilter(b, a, correlate_1, zi=zi*correlate_1[0])
+
+digi = []
+both = []
+for i in range(len(filt_corr_0)):
+    both.append(filt_corr_0[i] + filt_corr_1[i])
+    if both[i] > 0:
+        digi.append(1)
+    else:
+        digi.append(0)
+
+plt.subplot(4,1,1)
 plt.plot(data)
-plt.subplot(3,1,2)
-plt.plot(correlate_0 - correlate_1)
-#plt.subplot(3,1,3)
-#plt.plot(correlate_1)
+plt.subplot(4,1,2)
+plt.plot(range(len(correlate_0)), correlate_0, 'r-', correlate_1, 'b-')
+plt.subplot(4,1,3)
+plt.plot(both)
+plt.subplot(4,1,4)
+plt.plot(digi)
 plt.show()   
 
 exit()
