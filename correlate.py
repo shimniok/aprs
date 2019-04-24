@@ -83,21 +83,30 @@ for s in range(samp_per_bit-1):
     template_0[s] = np.sin(s*K*fzero)
     template_1[s] = np.sin(s*K*fone)
     
-plt.subplot(1,1,1)
-plt.plot(range(len(template_0)), template_0, 'r-x', template_1, 'b-x')
+#plt.subplot(1,1,1)
+#plt.plot(range(len(template_0)), template_0, 'r-x', template_1, 'b-x')
 #plt.subplot(2,1,2)
 #plt.plot(template_1)
-plt.show()
+#plt.show()
+    
+# correlate each chunk
+correlate_0 = []
+correlate_1 = []
+for c in range(int(len(data)/chunk_size)-1):
+    print(c)
+    chunk = data[c*chunk_size:(c+1)*chunk_size-1]
+    correlate_0 += correlate(chunk, template_0, mode='full').tolist()
+    correlate_1 += correlate(chunk, template_1, mode='full').tolist()
+
+plt.subplot(3,1,1)
+plt.plot(data)
+plt.subplot(3,1,2)
+plt.plot(correlate_0 - correlate_1)
+#plt.subplot(3,1,3)
+#plt.plot(correlate_1)
+plt.show()   
 
 exit()
-    
-for c in range(int(len(data)/chunk_size)):
-    print(c)
-    correlate(in1, in2, mode='full', method='auto')[source]    
-    
-
-
-
 
 # IQ multiplication
 dec_0_i = []
