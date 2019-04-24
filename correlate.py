@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib import axes as ax
 from scipy.signal import fir_filter_design as ffd
 from scipy.signal import filter_design as ifd
-from scipy.signal import resample, lfilter, butter, lfilter_zi
+from scipy.signal import resample, lfilter, butter, lfilter_zi, correlate
 
 if len(sys.argv) != 2:
     print("usage: {} filename".format(sys.argv[0]))
@@ -20,9 +20,9 @@ except Exception as e:
     print(e)
     exit(2)
 
-(nchannels, sampwidth, framerate, nframes, comptype, compname) = wav_file.getparams()
+(nchannels, sampwidth, Fsr, nframes, comptype, compname) = wav_file.getparams()
 
-print("{}: {} channels, {} bit, {} Hz, {} frames".format(sys.argv[1], nchannels, sampwidth * 8, framerate, nframes))
+print("{}: {} channels, {} bit, {} Hz, {} frames".format(sys.argv[1], nchannels, sampwidth * 8, Fsr, nframes))
 
 if nchannels != 1:
     print("can only run on mono wav files, sorry!")
@@ -36,39 +36,68 @@ data = struct.unpack('<{n}h'.format(n=nframes), data)
 wav_file.close()
 #print(data)
 
-# mark/space frequencies
-fzero = 2200.
-fone  = 1200.
-sps   = 20
+seconds      = nframes / Fsr            # number of seconds in recording
+fzero        = 2200.                    # frequency indicating 0
+fone         = 1200.                    # frequency indicating 1
+bps          = 1200.                    # bits per second
+samp_per_bit = int(np.ceil(Fsr/bps))   # samples per bit
+
+
+#print("Resampling...")
 
 ## Resample
-R = framerate/(fone*sps) # how much to down sample by
-Fsr = int(framerate/R)    # down-sampled sample rate
-data = resample(data, len(data)/R)
+#data = resample(x=data, num=int(seconds * Fsr) )
+#nframes = len(data)
 
-nframes=len(data)
-nframes -= nframes%sps
-
-print("R={} Fsr={} sps={} nframes={}".format(R, Fsr, sps, nframes))
+print("Fsr={} samp_per_bit={} nframes={}".format(Fsr, samp_per_bit, nframes))
 
 ## filter design arguements
-Fpass = 1000.      # passband edge
-Fstop = 2400.      # stopband edge
-Wp = Fpass/(Fsr)   # pass normalized frequency
-Ws = Fstop/(Fsr)   # stop normalized frequency
+#Fpass = 1000.      # passband edge
+#Fstop = 2400.      # stopband edge
+#Wp = Fpass/(Fsr)   # pass normalized frequency
+#Ws = Fstop/(Fsr)   # stop normalized frequency
 
-print("Filtering...")
+#print("Filtering...")
 ## Create a filter
-taps = 8
+#taps = 8
 #br = ffd.remez(taps, [0, Wp, Ws, .5], [1,0], maxiter=10000)
 #br = ffd.firwin2(taps, [0, Wp, Ws, 1], [0, 1, 1, 0])
-br = ffd.firwin(taps, cutoff=[Wp, Ws], window='blackmanharris', pass_zero=False)
+#br = ffd.firwin(taps, cutoff=[Wp, Ws], window='blackmanharris', pass_zero=False)
 
 # Once you have the coefficients from a filter design, (b for FIR b and a for IIR) you can use
 # a couple different functions to perform the filtering: lfilter, convolve, filtfilt. Typically
 # all these functions operate similar: y = filtfilt(b,a,x)
 # If you have a FIR filter simply set a=1, x is the input signal, b is the FIR coefficients.
-data = lfilter(br, 1, data)
+#data = lfilter(br, 1, data)
+
+## Correlation
+
+chunk_size = 2*samp_per_bit  # number of samples to capture and then evaluate
+
+template_0 = [0 for i in range(chunk_size)]
+template_1 = [0 for i in range(chunk_size)]
+
+K = 2*np.pi/Fsr
+
+for s in range(samp_per_bit-1):
+    template_0[s] = np.sin(s*K*fzero)
+    template_1[s] = np.sin(s*K*fone)
+    
+plt.subplot(1,1,1)
+plt.plot(range(len(template_0)), template_0, 'r-x', template_1, 'b-x')
+#plt.subplot(2,1,2)
+#plt.plot(template_1)
+plt.show()
+
+exit()
+    
+for c in range(int(len(data)/chunk_size)):
+    print(c)
+    correlate(in1, in2, mode='full', method='auto')[source]    
+    
+
+
+
 
 # IQ multiplication
 dec_0_i = []
@@ -111,7 +140,7 @@ print("Computing mean...")
 ## Can use zero crossings to detect 0->1, 1->0 transitions
 for s in range(int(nframes)):
     a = s
-    b = s+sps-1
+    b = s+samp_per_bit-1
     #i_0 = np.mean(dec_0_i[a:b])
     #q_0 = np.mean(dec_0_q[a:b])
     #i_1 = np.mean(dec_1_i[a:b])
