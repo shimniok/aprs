@@ -1,19 +1,34 @@
 #!/usr/bin/env python3
 
+import sys
 import numpy as np
 import wave
 import struct
 import matplotlib.pyplot as plt
+from matplotlib import axes as ax
 from scipy.signal import fir_filter_design as ffd
 from scipy.signal import filter_design as ifd
-from scipy.signal import resample, lfilter
+from scipy.signal import resample, lfilter, butter, lfilter_zi
 
-wav_file=wave.open("test01b.wav", 'r')
+if len(sys.argv) != 2:
+    print("usage: {} filename".format(sys.argv[0]))
+    exit(1)
+
+try:
+    wav_file=wave.open(sys.argv[1], 'r')
+except Exception as e:
+    print(e)
+    exit(2)
+
 (nchannels, sampwidth, framerate, nframes, comptype, compname) = wav_file.getparams()
 
-print("{} channels, {} bit, {} Hz, {} frames".format(nchannels, sampwidth * 8, framerate, nframes))
+print("{}: {} channels, {} bit, {} Hz, {} frames".format(sys.argv[1], nchannels, sampwidth * 8, framerate, nframes))
 
-#nframes=1000
+if nchannels != 1:
+    print("can only run on mono wav files, sorry!")
+    exit(3)
+
+print("Reading file...")
 
 ## Read wav file
 data = wav_file.readframes(nframes)
@@ -42,6 +57,7 @@ Fstop = 2400.      # stopband edge
 Wp = Fpass/(Fsr)   # pass normalized frequency
 Ws = Fstop/(Fsr)   # stop normalized frequency
 
+print("Filtering...")
 ## Create a filter
 taps = 8
 #br = ffd.remez(taps, [0, Wp, Ws, .5], [1,0], maxiter=10000)
@@ -62,14 +78,7 @@ dec_1_q = []
 d_0_iq = []
 d_1_iq = []
 d_iq = []
-for s in range(nframes):
-    phi = s * 2 * np.pi / Fsr
-    dec_0_i.append( np.cos(phi*fzero)*data[s] )
-    dec_0_q.append( np.sin(phi*fzero)*data[s] )
-    dec_1_i.append( np.cos(phi*fone)*data[s] )
-    dec_1_q.append( np.sin(phi*fone)*data[s] )
 
-## Find mean for each bit -- will need to somehow sync to first bit
 mean_0_i = []
 mean_0_q = []
 offset_0 = []
@@ -77,43 +86,51 @@ mean_1_i = []
 mean_1_q = []
 offset_1 = []
 offset = []
-for k in range(int(nframes/sps)):
-    a = k*sps
-    b = (k+1)*sps
-    i_0 = np.mean(dec_0_i[a:b])
-    q_0 = np.mean(dec_0_q[a:b])
-    i_1 = np.mean(dec_1_i[a:b])
-    q_1 = np.mean(dec_1_q[a:b])
-    mag_0 = np.sqrt(i_0**2 + q_0**2)
-    mag_1 = np.sqrt(i_1**2 + q_1**2)
-    for s in range(sps):
-        mean_0_i.append(i_0)
-        mean_0_q.append(q_0)
-        offset_0.append(mag_0)
-        mean_1_i.append(i_1)
-        mean_1_q.append(q_1)
-        offset_1.append(mag_1)
-        offset.append(mag_1 - mag_0)
 
-#print(mean_0_i)
+print("IQ Decoding...")
 
-#print(mean_0_i)
-#for k=range(length(DecodeZero_I_aligned)/sps)
-#    SymbolOffsets_Zero_I_aligned(( (k-1)*sps)+1 : k*(sps)) =
-#        mean(DecodeZero_I_aligned(( (k-1)*sps)+1 : k*(sps)))
+for s in range(nframes):
+    phi = s * 2 * np.pi / Fsr
+    dec_0_i.append( np.cos(phi*fzero)*data[s] )
+    dec_0_q.append( np.sin(phi*fzero)*data[s] )
+    dec_1_i.append( np.cos(phi*fone)*data[s] )
+    dec_1_q.append( np.sin(phi*fone)*data[s] )
 
+print("Filtering IQ...")
+## Low pass filter these waveforms
+b, a = butter(5, 30/Fsr, btype='low')
+zi = lfilter_zi(b, a)
+i_0, _ = lfilter(b, a, dec_0_i, zi=zi*dec_0_i[0])
+q_0, _ = lfilter(b, a, dec_0_q, zi=zi*dec_0_q[0])
+i_1, _ = lfilter(b, a, dec_1_q, zi=zi*dec_1_q[0])
+q_1, _ = lfilter(b, a, dec_1_q, zi=zi*dec_1_q[0])
 
-#wav_out=wave.open("out.wav", "w")
-#wav_out.setparams([nchannels, sampwidth, Fsr, nframes, comptype, compname])
-#data = data.tolist()
-#for i in range(nframes):
-#    data[i] = int(data[i])
-    #print(data[i])
-#frames = struct.pack('<{n}h'.format(n=nframes), *data)
-#wav_out.writeframes(frames)
-#wav_out.close()
+print("Computing mean...")
+
+## Find mean across bit period; basically running average
+## Can use zero crossings to detect 0->1, 1->0 transitions
+for s in range(int(nframes)):
+    a = s
+    b = s+sps-1
+    #i_0 = np.mean(dec_0_i[a:b])
+    #q_0 = np.mean(dec_0_q[a:b])
+    #i_1 = np.mean(dec_1_i[a:b])
+    #q_1 = np.mean(dec_1_q[a:b])
+
+    mag_0 = np.sqrt(i_0[s]**2 + q_0[s]**2)
+    mag_1 = np.sqrt(i_1[s]**2 + q_1[s]**2)
+
+    #mean_0_i.append(i_0)
+    #mean_0_q.append(q_0)
+    offset_0.append(mag_0)
+    #mean_1_i.append(i_1)
+    #mean_1_q.append(q_1)
+    offset_1.append(mag_1)
+    offset.append(mag_1 - mag_0)
 
 nsubs = 4
+
+ax.grid(which='major')
 
 plt.subplot(nsubs,1,1)
 plt.plot(data)
@@ -132,11 +149,11 @@ plt.title("Time domain audio wave")
 
 plt.subplot(nsubs,1,2)
 plt.title("Mean(I,Q) and Magnitude: 0")
-plt.plot(range(nframes), offset_0, 'r', mean_0_i, 'b--', mean_0_q, 'c--')
+plt.plot(range(nframes), offset_0, 'r', i_0, 'b--', q_0, 'c--')
 
 plt.subplot(nsubs,1,3)
 plt.title("Mean and Offset, 1")
-plt.plot(range(nframes), offset_1, 'r', mean_1_i, 'b--', mean_1_q, 'c--')
+plt.plot(range(nframes), offset_1, 'r', i_1, 'b--', q_1, 'c--')
 
 plt.subplot(nsubs,1,4)
 plt.title("0 and 1 combined")
