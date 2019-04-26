@@ -5,6 +5,7 @@ import numpy as np
 import wave
 import struct
 import matplotlib.pyplot as plt
+from scipy.fftpack import fft
 from matplotlib import axes as ax
 from scipy.signal import fir_filter_design as ffd
 from scipy.signal import filter_design as ifd
@@ -13,9 +14,9 @@ from scipy.signal import *
 #################################################################################################
 ## Command line arguments
 ##
-if len(sys.argv) != 2:
-    print("usage: {} filename".format(sys.argv[0]))
-    exit(1)
+#if len(sys.argv) != 2:
+#    print("usage: {} filename".format(sys.argv[0]))
+#    exit(1)
 
 #################################################################################################
 ## Read wav file
@@ -51,39 +52,69 @@ samp_per_bit = int(np.ceil(Fsr/bps))    # samples per bit
 ##
 print("Filtering...")
 
-fp = 2400 
-fs = 4400 
-gp = 5
-gs = 60
-
-## Low pass
+fp = 2300
+fs = 10000
+gp = 0.1
+gs = 24
 wp = fp/Fsr
 ws = fs/Fsr
-b, a = iirdesign(wp, ws, gpass=2., gstop=10., analog=False, ftype='butter')
-data2 = lfilter(b, a, data)
+
+print("fp={} wp={} fs={} ws={}".format(fp, wp, fs, ws))
+
+b, a = iirdesign(wp, ws, gp, gs, analog=False, ftype='butter')
+data1 = lfilter(b, a, data)
+
+fp = 1100
+fs = 100
+gs = 40
+wp = fp/Fsr
+ws = fs/Fsr
+
+b, a = iirdesign(wp, ws, gp, gs, analog=False, ftype='cheby1')
+data2 = lfilter(b, a, data1)
 
 #################################################################################################
 ## Save WAV file
 ##
 
-#try:
-#    wav_file=wave.open("out.wav", 'wb')
-#except Exception as e:
-#    print(e)
-#    exit(2)
+try:
+   wav_out = wave.open("out.wav", 'wb')
+except Exception as e:
+    print(e)
+    exit(2)
 
-#wav_file.setparams([nchannels, sampwidth, Fsr, len(data2), comptype, compname])
-#frames = struct.pack('<{n}h'.format(n=nframes), np.array(data2))
-#wav_file.writeframes(frames)
-#wav_file.close()
+wav_out.setparams([nchannels, sampwidth, Fsr, nframes, comptype, compname])
+dout = data2.tolist()
+for i in range(nframes):
+    dout[i] = int(data2[i])
+frames = struct.pack('<{n}h'.format(n=nframes), *dout)
+wav_out.writeframes(frames)
+wav_out.close()
 
 #################################################################################################
 ## Plot data
 ##
+fig, ax = plt.subplots(num=None, figsize=(20, 12), dpi=80, facecolor='w', edgecolor='k')
+#plt.subplot(2,2,1)
+#plt.title('Original Waveform')
+#plt.plot(data)
+
 plt.subplot(2,1,1)
-plt.plot(data)
-plt.subplot(2,1,2)
+plt.title('Filtered Waveform')
 plt.plot(data2)
+
+#plt.subplot(2,1,1)
+#plt.title('Original FFT')
+#N = int(len(data)/2)
+#Y = np.fft.fft(data)
+#freq = np.fft.fftfreq(len(data), 1/Fsr)
+#plt.plot(freq[0:N], np.abs(Y[0:N]))
+
+plt.subplot(2,1,2)
+plt.title('Filtered FFT')
+N = int(len(data2)/2)
+Y = np.fft.fft(data2)
+freq = np.fft.fftfreq(len(data2), 1/Fsr)
+plt.plot(freq[0:N], np.abs(Y[0:N]))
+
 plt.show()   
-
-
