@@ -13,10 +13,11 @@ Steps
 
 APRS Layers (http://n1vg.net/packet/)
 
-| Network   | Packets |           |   |   |
-|-----------|---------|-----------|---|---|
-| Data Link | Frames  | AX.25     |   |   |
-| Physical  | Bits    | AFSK, NRZ |   |   |
+| OSI Layer | Description | Implementation |
+|-----------|-------------|----------------|
+| Network   | Packets     | APRS           |
+| Data Link | Frames      | AX.25          |
+| Physical  | Bits        | AFSK, NRZ      |
 
 
 APRS Information Field (http://www.aprs.org/doc/APRS101.PDF)
