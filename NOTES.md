@@ -69,14 +69,14 @@ In all of these cases, the Destination Address SSID may specify a generic APRS d
    * FCS 1
    * Flag 1
 
-Bit Stuffing the NRZI bitstream
+## Bit Stuffing the NRZI bitstream
  * Any run of five 1s has a 0 inserted after the fifth 1
 
-NRZI
+## NRZI
  * 0 is encoded as a change in tone, and 
  * 1 is encoded as no change in tone.
 
-AFSK
+## AFSK
  * Audio Frequency-Shift Keying
  * Two tones: 0 == 2200Hz, 1 == 1200Hz 
  * tones must be continuous phase
