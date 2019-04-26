@@ -61,7 +61,7 @@ ws = fs/Fsr
 
 print("fp={} wp={} fs={} ws={}".format(fp, wp, fs, ws))
 
-b, a = iirdesign(wp, ws, gp, gs, analog=False, ftype='butter')
+b, a = iirdesign(wp, ws, gp, gs, analog=False, ftype='cheby1')
 data1 = lfilter(b, a, data)
 
 fp = 1100
