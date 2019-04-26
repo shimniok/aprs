@@ -1,14 +1,19 @@
 
-Goal: process APRS packets in embedded system
+# APRS Notes
 
-IIR filter best for embedded?
-verify: phase response screwing with tones
-verify: phase response for various band pass filters
+## Goal: process APRS packets in embedded system
 
-Steps
+## Questions, notes, todo, etc.
+
+ * IIR filter best for embedded?
+ * verify: phase response screwing with tones
+ * verify: phase response for various band pass filters
+
+## Decoding Steps
  * Demodulate AFSK to get 1's and 0's
- * Decode from non-return to zero inverted (NRZI) line encoding
-
+ * Decode from non-return to zero inverted (NRZI) line encoding including unstuffing bits
+ * Decode X.25 frame
+ * Decode APRS packet
 
 
 APRS Layers (http://n1vg.net/packet/)
@@ -20,10 +25,22 @@ APRS Layers (http://n1vg.net/packet/)
 | Physical  | Bits        | AFSK, NRZ      |
 
 
-APRS Information Field (http://www.aprs.org/doc/APRS101.PDF)
+## APRS Information Field (http://www.aprs.org/doc/APRS101.PDF)
 
+The AX.25 Destination Address field can contain 6 different types of APRS
+information:
 
-FCS bit-at-a-time algorithm
+ * A generic APRS address.
+ * A generic APRS address with a symbol.
+ * An APRS software version number.
+ * Mic-E encoded data.
+ * A Maidenhead Grid Locator (obsolete).
+ * An Alternate Net (ALTNET) address.
+
+In all of these cases, the Destination Address SSID may specify a generic APRS digipeater path.
+
+## FCS bit-at-a-time algorithm
+
  * FCS is a two-byte checksum added to the end of every frame.
  * FCS is generated using the CRC-CCITT polynomial, and is sent low-byte first.
  * Start with the 16-bit FCS set to 0xffff.
@@ -34,7 +51,8 @@ FCS bit-at-a-time algorithm
  * After the last data bit, take the ones complement (inverse) of the FCS value and send it low-byte first.
 
 
-X.25
+## X.25
+
  * AX.25 protocol defines the packet format.
  * Based on the High Level Data Link Control protocol, or HDLC.
  * Frames start and end with the binary sequence 01111110
