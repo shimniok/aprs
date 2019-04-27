@@ -4,7 +4,7 @@
 ##
 ## usage: $0 basename
 
-if [ "$#" -lt 2 ]; then
+if [ "$#" -ne 1 ]; then
   echo "usage: $0 basename"
   exit 1
 fi
